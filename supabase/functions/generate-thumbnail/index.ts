@@ -58,8 +58,8 @@ serve(async (req) => {
 
     console.log("Generating thumbnails with prompt:", prompt);
 
-    // Create prediction using black-forest-labs/flux-1.1-pro
-    const response = await fetch("https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions", {
+    // Create prediction using black-forest-labs/flux-schnell (fast, reliable model)
+    const response = await fetch("https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${REPLICATE_API_TOKEN}`,
@@ -69,11 +69,11 @@ serve(async (req) => {
       body: JSON.stringify({
         input: {
           prompt: prompt,
+          num_outputs: numOutputs,
           aspect_ratio: "16:9",
           output_format: "png",
           output_quality: 90,
-          safety_tolerance: 2,
-          prompt_upsampling: true,
+          go_fast: true,
         },
       }),
     });

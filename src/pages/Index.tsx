@@ -75,48 +75,47 @@ const Index = () => {
 
       console.log("Full prompt:", fullPrompt);
 
-      // Generate 3 thumbnails in parallel (flux-1.1-pro generates 1 per request)
-      const generateOne = async (variation: number) => {
-        const variedPrompt = variation === 0 
-          ? fullPrompt 
-          : `${fullPrompt}, variation ${variation}, unique composition`;
-          
-        const { data: prediction, error } = await supabase.functions.invoke("generate-thumbnail", {
-          body: { prompt: variedPrompt }
-        });
-
-        if (error) throw new Error(error.message);
-        if (prediction.error) throw new Error(prediction.error);
-        if (prediction.title) throw new Error(prediction.detail || prediction.title);
-
-        console.log(`Prediction ${variation} response:`, prediction);
-
-        // Handle sync response
-        if (prediction.output) {
-          return typeof prediction.output === 'string' ? prediction.output : prediction.output[0];
-        }
-
-        // Poll for async response
-        if (prediction.id) {
-          const urls = await pollForCompletion(prediction.id);
-          return urls[0];
-        }
-
-        throw new Error("Invalid response from API");
-      };
-
-      // Run 3 generations in parallel
-      const results = await Promise.all([
-        generateOne(0),
-        generateOne(1),
-        generateOne(2)
-      ]);
-
-      setThumbnails(results.filter(Boolean));
-      toast({
-        title: "Thumbnails Generated!",
-        description: "Click on a thumbnail to select it for refinement.",
+      // Start the prediction
+      const { data: prediction, error } = await supabase.functions.invoke("generate-thumbnail", {
+        body: { prompt: fullPrompt, numOutputs: 3 }
       });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (prediction.error) {
+        throw new Error(prediction.error);
+      }
+
+      if (prediction.title) {
+        // Replicate API error format
+        throw new Error(prediction.detail || prediction.title);
+      }
+
+      console.log("Prediction response:", prediction);
+
+      // Check if output is already available (sync response with Prefer: wait)
+      if (prediction.output && Array.isArray(prediction.output)) {
+        setThumbnails(prediction.output);
+        toast({
+          title: "Thumbnails Generated!",
+          description: "Click on a thumbnail to select it for refinement.",
+        });
+        return;
+      }
+
+      // If we have an ID but no output, poll for completion
+      if (prediction.id) {
+        const outputUrls = await pollForCompletion(prediction.id);
+        setThumbnails(outputUrls);
+        toast({
+          title: "Thumbnails Generated!",
+          description: "Click on a thumbnail to select it for refinement.",
+        });
+      } else {
+        throw new Error("Invalid response from API");
+      }
 
     } catch (error) {
       console.error("Generation error:", error);
