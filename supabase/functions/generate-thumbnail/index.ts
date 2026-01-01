@@ -32,7 +32,7 @@ serve(async (req) => {
         `https://api.replicate.com/v1/predictions/${body.predictionId}`,
         {
           headers: {
-            Authorization: `Token ${REPLICATE_API_TOKEN}`,
+            Authorization: `Bearer ${REPLICATE_API_TOKEN}`,
             "Content-Type": "application/json",
           },
         }
@@ -58,23 +58,22 @@ serve(async (req) => {
 
     console.log("Generating thumbnails with prompt:", prompt);
 
-    // Create prediction with justmalhar/flux-thumbnails-v2
-    const response = await fetch("https://api.replicate.com/v1/predictions", {
+    // Create prediction using black-forest-labs/flux-schnell (fast, reliable model)
+    const response = await fetch("https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions", {
       method: "POST",
       headers: {
-        Authorization: `Token ${REPLICATE_API_TOKEN}`,
+        Authorization: `Bearer ${REPLICATE_API_TOKEN}`,
         "Content-Type": "application/json",
+        "Prefer": "wait"
       },
       body: JSON.stringify({
-        version: "cce0e4dc1c2a1a74393d8b7d0a77e99da24cd8e6a15bae9b7d41eb68cd02ffcf",
         input: {
           prompt: prompt,
           num_outputs: numOutputs,
           aspect_ratio: "16:9",
           output_format: "png",
           output_quality: 90,
-          num_inference_steps: 28,
-          guidance_scale: 3.5,
+          go_fast: true,
         },
       }),
     });
