@@ -4,6 +4,7 @@ import { GeneratorForm, GeneratorFormData } from "@/components/GeneratorForm";
 import { ThumbnailGrid } from "@/components/ThumbnailGrid";
 import { RefinementPanel } from "@/components/RefinementPanel";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const STYLES_MAP: Record<string, string> = {
   bold: "bold dramatic high contrast cinematic lighting intense colors impactful",
@@ -19,6 +20,41 @@ const Index = () => {
   const [isRefining, setIsRefining] = useState(false);
   const [lastFormData, setLastFormData] = useState<GeneratorFormData | null>(null);
   const { toast } = useToast();
+
+  const pollForCompletion = async (predictionId: string): Promise<string[]> => {
+    const maxAttempts = 60; // 2 minutes max
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+      const { data, error } = await supabase.functions.invoke("generate-thumbnail", {
+        body: { predictionId }
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      console.log("Poll response:", data);
+
+      if (data.status === "succeeded") {
+        return Array.isArray(data.output) ? data.output : [data.output];
+      }
+
+      if (data.status === "failed") {
+        throw new Error(data.error || "Thumbnail generation failed");
+      }
+
+      if (data.status === "canceled") {
+        throw new Error("Generation was canceled");
+      }
+
+      // Wait 2 seconds before polling again
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      attempts++;
+    }
+
+    throw new Error("Generation timed out");
+  };
 
   const generateThumbnails = async (data: GeneratorFormData) => {
     setIsGenerating(true);
@@ -37,29 +73,30 @@ const Index = () => {
         "16:9 aspect ratio, high quality, professional YouTube thumbnail"
       ].filter(Boolean).join(", ");
 
-      // For now, we'll simulate the API call since we need Lovable Cloud
-      // to securely store the REPLICATE_API_TOKEN
-      toast({
-        title: "API Key Required",
-        description: "To generate real thumbnails, please connect Lovable Cloud to securely store your Replicate API token.",
-        variant: "destructive"
+      console.log("Full prompt:", fullPrompt);
+
+      // Start the prediction
+      const { data: prediction, error } = await supabase.functions.invoke("generate-thumbnail", {
+        body: { prompt: fullPrompt, numOutputs: 3 }
       });
 
-      // Simulate generation with placeholder images
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Using placeholder images for demo
-      const placeholders = [
-        `https://images.unsplash.com/photo-1611162616475-46b635cb6868?w=1280&h=720&fit=crop&q=80`,
-        `https://images.unsplash.com/photo-1611162618071-b39a2ec055fb?w=1280&h=720&fit=crop&q=80`,
-        `https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?w=1280&h=720&fit=crop&q=80`
-      ];
-      
-      setThumbnails(placeholders);
-      
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (prediction.error) {
+        throw new Error(prediction.error);
+      }
+
+      console.log("Prediction started:", prediction);
+
+      // Poll for completion
+      const outputUrls = await pollForCompletion(prediction.id);
+      setThumbnails(outputUrls);
+
       toast({
-        title: "Demo Mode",
-        description: "Showing placeholder thumbnails. Connect Lovable Cloud for AI generation.",
+        title: "Thumbnails Generated!",
+        description: "Click on a thumbnail to select it for refinement.",
       });
 
     } catch (error) {
@@ -90,12 +127,27 @@ const Index = () => {
 
       console.log("Refinement prompt:", refinementPrompt);
 
-      // Simulate refinement
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+      // Start the prediction
+      const { data: prediction, error } = await supabase.functions.invoke("generate-thumbnail", {
+        body: { prompt: refinementPrompt, numOutputs: 3 }
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (prediction.error) {
+        throw new Error(prediction.error);
+      }
+
+      // Poll for completion
+      const outputUrls = await pollForCompletion(prediction.id);
+      setThumbnails(outputUrls);
+      setSelectedThumbnailIndex(null);
+
       toast({
-        title: "Refinement Complete",
-        description: "In production, this would generate refined thumbnails using Replicate API.",
+        title: "Refinement Complete!",
+        description: "New thumbnail options have been generated.",
       });
 
     } catch (error) {
