@@ -88,16 +88,34 @@ const Index = () => {
         throw new Error(prediction.error);
       }
 
-      console.log("Prediction started:", prediction);
+      if (prediction.title) {
+        // Replicate API error format
+        throw new Error(prediction.detail || prediction.title);
+      }
 
-      // Poll for completion
-      const outputUrls = await pollForCompletion(prediction.id);
-      setThumbnails(outputUrls);
+      console.log("Prediction response:", prediction);
 
-      toast({
-        title: "Thumbnails Generated!",
-        description: "Click on a thumbnail to select it for refinement.",
-      });
+      // Check if output is already available (sync response with Prefer: wait)
+      if (prediction.output && Array.isArray(prediction.output)) {
+        setThumbnails(prediction.output);
+        toast({
+          title: "Thumbnails Generated!",
+          description: "Click on a thumbnail to select it for refinement.",
+        });
+        return;
+      }
+
+      // If we have an ID but no output, poll for completion
+      if (prediction.id) {
+        const outputUrls = await pollForCompletion(prediction.id);
+        setThumbnails(outputUrls);
+        toast({
+          title: "Thumbnails Generated!",
+          description: "Click on a thumbnail to select it for refinement.",
+        });
+      } else {
+        throw new Error("Invalid response from API");
+      }
 
     } catch (error) {
       console.error("Generation error:", error);
